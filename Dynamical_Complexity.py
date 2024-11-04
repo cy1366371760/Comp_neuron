@@ -199,8 +199,8 @@ class ModularNetwork(object):
     self.excit = range(0, idx)
     self.inhib = range(idx, idx + inhib)
     self.connection = np.zeros((idx, idx))
-    self.delay_coef = np.ones((idx, idx))
-    self.wt_coef = np.ones((idx, idx))
+    self.delay_coef = np.zeros((idx, idx))
+    self.wt_coef = np.zeros((idx, idx))
 
   def gen_modular_small_world(self, md_lst, md_each, p):
     all_node_lst = []
@@ -216,7 +216,7 @@ class ModularNetwork(object):
         self.connection[i][j] = 1
     # rewiring
     for md in md_lst:
-      other_md = set(all_node_lst) - set(md)
+      other_md = list(set(all_node_lst) - set(md))
       for i in md:
         for j in md:
           if self.connection[i][j]:
@@ -227,7 +227,7 @@ class ModularNetwork(object):
                 k = random.choice(other_md)
               self.connection[i][k] = 1
 
-  def gen_coef(target_matrix, fr_range, to_range, min_val, max_val):
+  def gen_coef(self, target_matrix, fr_range, to_range, min_val, max_val):
     for i in fr_range:
       for j in to_range:
         target_matrix[i][j] = random.uniform(min_val, max_val)
@@ -248,3 +248,13 @@ class ModularNetwork(object):
   def add_in2in_connection():
     # to do
     pass
+
+if __name__ == '__main__':
+  network = ModularNetwork(8, 100, 200)
+  network.add_ex2ex_connection(md_each=1000, p=0.1, wt_min=1, 
+                               wt_max=1, scaling=17, delay_min=1, delay_max=20)
+  # network = ModularNetwork(8, 10, 20)
+  # network.add_ex2ex_connection(10, 0.1, 1, 1, 17, 1, 20)
+  print(network.connection)
+  print(network.wt_coef)
+  print(network.delay_coef)
