@@ -197,7 +197,13 @@ class ModularNetwork(object):
       self.md_excit_lst.append(range(idx, idx + excit))
       idx = idx + excit
     self.inhib = range(idx, idx + inhib)
-    self.Delay = np.array() 
-  def add_ex2ex_connection(self, md_each, wt):
+    self.connection = np.zeros((idx, idx))
+  def gen_modular_small_world(self, md_lst, md_each):
     for md in range(0, self.md_num):
-      for 
+      node_lst = list(md_lst[md])
+      for _ in range(md_each):
+        i = random.choice(node_lst)
+        j = random.choice(node_lst)
+
+  def add_ex2ex_connection(self, md_each, wt):
+    gen_modular_small_world(self.md_excit_lst, md_each)
