@@ -196,12 +196,17 @@ class ModularNetwork(object):
     for i in range(0, md_num):
       self.md_excit_lst.append(range(idx, idx + excit))
       idx = idx + excit
+    self.excit = range(0, idx)
     self.inhib = range(idx, idx + inhib)
     self.connection = np.zeros((idx, idx))
+    self.delay_coef = np.ones((idx, idx))
+    self.wt_coef = np.ones((idx, idx))
 
   def gen_modular_small_world(self, md_lst, md_each, p):
-    for md in range(0, self.md_num):
-      node_lst = list(md_lst[md])
+    all_node_lst = []
+    for md in md_lst:
+      node_lst = list(md)
+      all_node_lst.extend(node_lst)
       for _ in range(md_each):
         i = random.choice(node_lst)
         j = random.choice(node_lst)
@@ -210,11 +215,10 @@ class ModularNetwork(object):
           j = random.choice(node_lst)
         self.connection[i][j] = 1
     # rewiring
-    excit_lst = self.all_excit_list()
-    for md in range(0, self.md_num):
-      other_md = set(range(0, self.inhib.start)) - set(md_lst[md])
-      for i in md_lst[md]:
-        for j in md_lst[md]:
+    for md in md_lst:
+      other_md = set(all_node_lst) - set(md)
+      for i in md:
+        for j in md:
           if self.connection[i][j]:
             if random.uniform(0, 1) < p:
               self.connection[i][j] = 0
@@ -223,5 +227,24 @@ class ModularNetwork(object):
                 k = random.choice(other_md)
               self.connection[i][k] = 1
 
+  def gen_coef(target_matrix, fr_range, to_range, min_val, max_val):
+    for i in fr_range:
+      for j in to_range:
+        target_matrix[i][j] = random.uniform(min_val, max_val)
+
   def add_ex2ex_connection(self, md_each, p, wt_min, wt_max, scaling, delay_min, delay_max):
     self.gen_modular_small_world(self.md_excit_lst, md_each, p)
+    self.gen_coef(self.wt_coef, self.excit, self.excit, wt_min * scaling, wt_max * scaling)
+    self.gen_coef(self.delay_coef, self.excit, self.excit, delay_min, delay_max)
+  
+  def add_ex2in_connection():
+    # to do
+    pass
+
+  def add_in2ex_connection():
+    # to do
+    pass
+
+  def add_in2in_connection():
+    # to do
+    pass
