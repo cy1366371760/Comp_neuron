@@ -198,12 +198,30 @@ class ModularNetwork(object):
       idx = idx + excit
     self.inhib = range(idx, idx + inhib)
     self.connection = np.zeros((idx, idx))
-  def gen_modular_small_world(self, md_lst, md_each):
+
+  def gen_modular_small_world(self, md_lst, md_each, p):
     for md in range(0, self.md_num):
       node_lst = list(md_lst[md])
       for _ in range(md_each):
         i = random.choice(node_lst)
         j = random.choice(node_lst)
+        while i == j or self.connection[i][j]:
+          i = random.choice(node_lst)
+          j = random.choice(node_lst)
+        self.connection[i][j] = 1
+    # rewiring
+    excit_lst = self.all_excit_list()
+    for md in range(0, self.md_num):
+      other_md = set(range(0, self.inhib.start)) - set(md_lst[md])
+      for i in md_lst[md]:
+        for j in md_lst[md]:
+          if self.connection[i][j]:
+            if random.uniform(0, 1) < p:
+              self.connection[i][j] = 0
+              k = random.choice(other_md)
+              while self.connection[i][k]:
+                k = random.choice(other_md)
+              self.connection[i][k] = 1
 
-  def add_ex2ex_connection(self, md_each, wt):
-    gen_modular_small_world(self.md_excit_lst, md_each)
+  def add_ex2ex_connection(self, md_each, p, wt_min, wt_max, scaling, delay_min, delay_max):
+    self.gen_modular_small_world(self.md_excit_lst, md_each, p)
