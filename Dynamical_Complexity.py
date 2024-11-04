@@ -200,4 +200,4 @@ class ModularNetwork(object):
     self.Delay = np.array() 
   def add_ex2ex_connection(self, md_each, wt):
     for md in range(0, self.md_num):
-      for 
+      for jkjkmk
