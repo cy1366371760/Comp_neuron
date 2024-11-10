@@ -14,6 +14,7 @@ Thanks to Paul Vanhaesebrouck for bug-hunting.
 
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
 class IzNetwork(object):
   """
@@ -232,11 +233,14 @@ class ModularNetwork(object):
       for j in to_range:
         target_matrix[i][j] = random.uniform(min_val, max_val)
 
+
   def add_ex2ex_connection(self, md_each, p, wt_min, wt_max, scaling, delay_min, delay_max):
     self.gen_modular_small_world(self.md_excit_lst, md_each, p)
     self.gen_coef(self.wt_coef, self.excit, self.excit, wt_min * scaling, wt_max * scaling)
     self.gen_coef(self.delay_coef, self.excit, self.excit, delay_min, delay_max)
-  
+
+
+
   def add_ex2in_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
     # Create random excitatory-to-inhibitory connections
@@ -265,12 +269,44 @@ class ModularNetwork(object):
     self.gen_coef(self.wt_coef, self.inhib, self.inhib, wt_min * scaling, wt_max * scaling)
     self.gen_coef(self.delay_coef, self.inhib, self.inhib, delay_min, delay_max)
 
+  def simulate_network(self, duration=1000):
+      # Izhikevich
+      iz_network = IzNetwork(len(self.excit) + len(self.inhib), 20)
+      iz_network.setWeights(self.wt_coef)
+      iz_network.setDelays(self.delay_coef)
+
+      firing_data = []
+      for t in range(duration):
+          if t % 10 == 0:
+              I = np.zeros(len(self.excit) + len(self.inhib))
+              I[random.choice(self.excit)] = 10
+              iz_network.setCurrent(I)
+          fired_neurons = iz_network.update()
+          firing_data.append(fired_neurons)
+
+      return firing_data
+
+
+
 if __name__ == '__main__':
   network = ModularNetwork(8, 100, 200)
-  network.add_ex2ex_connection(md_each=1000, p=0.1, wt_min=1, 
-                               wt_max=1, scaling=17, delay_min=1, delay_max=20)
+  network.add_ex2ex_connection(md_each=1000, p=0.1, wt_min=1,
+                              wt_max=1, scaling=17, delay_min=1, delay_max=20)
+  network.add_ex2in_connection(wt_min=1, wt_max=1, scaling=1, delay_min=1, delay_max=20)
+  network.add_in2ex_connection(wt_min=1, wt_max=1, scaling=1, delay_min=1, delay_max=20)
+  network.add_in2in_connection(wt_min=1, wt_max=1, scaling=1, delay_min=1, delay_max=20)
+
+  firing_data = network.simulate_network(duration=1000)
   # network = ModularNetwork(8, 10, 20)
   # network.add_ex2ex_connection(10, 0.1, 1, 1, 17, 1, 20)
   print(network.connection)
   print(network.wt_coef)
   print(network.delay_coef)
+  plt.figure(figsize=(10, 6))
+  for t, neurons in enumerate(firing_data):
+    for neuron in neurons:
+      plt.plot([t, t + 1], [neuron, neuron], color='black')
+  plt.title('Raster Plot of Neuron Firing')
+  plt.xlabel('Time (ms)')
+  plt.ylabel('Neuron Index')
+  plt.show()
