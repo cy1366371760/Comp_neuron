@@ -237,17 +237,33 @@ class ModularNetwork(object):
     self.gen_coef(self.wt_coef, self.excit, self.excit, wt_min * scaling, wt_max * scaling)
     self.gen_coef(self.delay_coef, self.excit, self.excit, delay_min, delay_max)
   
-  def add_ex2in_connection():
-    # to do
-    pass
+  def add_ex2in_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
-  def add_in2ex_connection():
-    # to do
-    pass
+    # Create random excitatory-to-inhibitory connections
+    for i in self.excit:
+      j = random.choice(self.inhib)
+      self.connection[i][j] = 1
+    self.gen_coef(self.wt_coef, self.excit, self.inhib, wt_min * scaling, wt_max * scaling)
+    self.gen_coef(self.delay_coef, self.excit, self.inhib, delay_min, delay_max)
 
-  def add_in2in_connection():
-    # to do
-    pass
+  def add_in2ex_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
+
+    # Create random inhibitory-to-excitatory connections
+    for j in self.inhib:
+      i = random.choice(self.excit)
+      self.connection[j][i] = 1
+    self.gen_coef(self.wt_coef, self.inhib, self.excit, wt_min * scaling, wt_max * scaling)
+    self.gen_coef(self.delay_coef, self.inhib, self.excit, delay_min, delay_max)
+
+  def add_in2in_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
+
+    for i in self.inhib:
+      j = random.choice(self.inhib)
+      while i == j:
+        j = random.choice(self.inhib)
+      self.connection[i][j] = 1
+    self.gen_coef(self.wt_coef, self.inhib, self.inhib, wt_min * scaling, wt_max * scaling)
+    self.gen_coef(self.delay_coef, self.inhib, self.inhib, delay_min, delay_max)
 
 if __name__ == '__main__':
   network = ModularNetwork(8, 100, 200)
