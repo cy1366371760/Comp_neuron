@@ -16,6 +16,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 
+#--------------------------------- Start of IzNetwork class, referred from Exercise 2 ------------------------------------
 class IzNetwork(object):
   """
   This class is used to simulate a network of Izhikevich neurons. The state of
@@ -186,26 +187,29 @@ class IzNetwork(object):
     self._cursor += 1
 
     return fired_idx
+#-------------------------------------------- End of IzNetwork class --------------------------------------------
 
 class ModularNetwork(object):
-  # M = Module number, Ex = Excitatory each Module, In = inhibitory each neuron
+  # md_num = module number, excit = number of excitatory in each Module, inhib = number of inhibitory each neuron
   def __init__(self, md_num, excit, inhib): 
     self.md_num = md_num
-    # module list, contain excitatory, [(0...100), (100, 200), ...]
+    # module list, contain excitatory described by range : [range(0,100), range(100,200), ..., range(700,800)]
     self.md_excit_lst = []
     idx = 0
     for i in range(0, md_num):
       self.md_excit_lst.append(range(idx, idx + excit))
       idx = idx + excit
-    self.excit = range(0, idx)
-    self.inhib = range(idx, idx + inhib)
+    self.excit = range(0, idx) # range for all excitatory neurons
+    self.inhib = range(idx, idx + inhib) # range for all inhibitory neurons
     idx = idx + inhib
-    self.connection = np.zeros((idx, idx))
-    self.delay_coef = np.zeros((idx, idx), dtype=int)
-    self.wt_coef = np.zeros((idx, idx))
+    self.connection = np.zeros((idx, idx)) # connection matrix
+    self.delay_coef = np.zeros((idx, idx), dtype=int) # delay matrix
+    self.wt_coef = np.zeros((idx, idx)) # weight matrix
 
+  # generate modular small world network, md_lst: list of module, md_each: number of neuron in each module, p: probability of rewiring
   def gen_modular_small_world(self, md_lst, md_each, p):
     all_node_lst = []
+    # create random one-way connection
     for md in md_lst:
       node_lst = list(md)
       all_node_lst.extend(node_lst)
@@ -216,7 +220,8 @@ class ModularNetwork(object):
           i = random.choice(node_lst)
           j = random.choice(node_lst)
         self.connection[i][j] = 1
-    # rewiring
+
+    # rewiring with probability p
     for md in md_lst:
       other_md = list(set(all_node_lst) - set(md))
       for i in md:
@@ -229,6 +234,7 @@ class ModularNetwork(object):
                 k = random.choice(other_md)
               self.connection[i][k] = 1
 
+  # generate random coefficient matrix for weight or delay
   def gen_coef(self, target_matrix, fr_range, to_range, min_val, max_val, need_int = False):
     for i in fr_range:
       for j in to_range:
@@ -237,12 +243,13 @@ class ModularNetwork(object):
         else:
           target_matrix[i][j] = random.uniform(min_val, max_val)
 
-
+  # add excitatory to excitatory connection, use modular small world network
   def add_ex2ex_connection(self, md_each, p, wt_min, wt_max, scaling, delay_min, delay_max):
     self.gen_modular_small_world(self.md_excit_lst, md_each, p)
     self.gen_coef(self.wt_coef, self.excit, self.excit, wt_min * scaling, wt_max * scaling)
     self.gen_coef(self.delay_coef, self.excit, self.excit, delay_min, delay_max, need_int = True)
 
+  # add excitatory to inhibitory connection, 4 excitatory neurons to 1 inhibitory neuron
   def add_ex2in_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
     # Create random excitatory-to-inhibitory connections
@@ -259,6 +266,7 @@ class ModularNetwork(object):
     self.gen_coef(self.wt_coef, self.excit, self.inhib, wt_min * scaling, wt_max * scaling)
     self.gen_coef(self.delay_coef, self.excit, self.inhib, delay_min, delay_max, need_int = True)
 
+  # add inhibitory to excitatory connection, each inhibitory neuron to all excitatory neurons
   def add_in2ex_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
     for i in self.inhib:
@@ -267,6 +275,7 @@ class ModularNetwork(object):
     self.gen_coef(self.wt_coef, self.inhib, self.excit, wt_min * scaling, wt_max * scaling)
     self.gen_coef(self.delay_coef, self.inhib, self.excit, delay_min, delay_max, need_int = True)
 
+  # add inhibitory to inhibitory connection, each inhibitory neuron to all other inhibitory neurons
   def add_in2in_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
     for i in self.inhib:
@@ -276,6 +285,7 @@ class ModularNetwork(object):
     self.gen_coef(self.wt_coef, self.inhib, self.inhib, wt_min * scaling, wt_max * scaling)
     self.gen_coef(self.delay_coef, self.inhib, self.inhib, delay_min, delay_max, need_int = True)
 
+  # plot connection matrix
   def plot_connection(self, p=0.1, show=False):
     # Create matrix for counting connections between modules
     n_modules = self.md_num + 1  # +1 for inhibitory module
@@ -359,10 +369,12 @@ class ModularNetwork(object):
     plt.grid(True, which='minor', color='black', linewidth=0.5)
     if show:
         plt.show()
-    plt.savefig('connection_matrix_p={}.png'.format(p))
+    plt.savefig('connection_matrix_p={}.pdf'.format(p))
 
+  # simulate network with Izhikevich model, draw raster plot and firing rate
   def simulate_network(self, duration=1000, p=0.1, show=False):
-      # Izhikevich
+      # Izhikevich, a b c d are parameters for excitatory and inhibitory neurons
+      # same as Exercise 2
       N = len(self.excit) + len(self.inhib)
       a = []
       b = []
@@ -401,6 +413,7 @@ class ModularNetwork(object):
       iz_network.setDelays(self.delay_coef)
 
       V = np.zeros((duration, len(self.excit)))
+      # simulate duration ms
       for t in range(duration):
         I = np.random.poisson(lam = 0.01, size = N)
         I[I > 0] = 1
@@ -421,7 +434,7 @@ class ModularNetwork(object):
       plt.xticks(range(0, 1001, 100))
       if show:
         plt.show()
-      plt.savefig('raster_plot_p={}.png'.format(p))
+      plt.savefig('raster_plot_p={}.pdf'.format(p))
 
       x = [20 * i for i in range(0, 50)]
       ys = []
@@ -443,21 +456,13 @@ class ModularNetwork(object):
       plt.xticks(range(0, 1001, 100))
       if show:
         plt.show()
-      plt.savefig('firing_rate_p={}.png'.format(p))
-
-    
-
-#   T = 500
-# V = np.zeros((T, N))
-# for t in range(T):
-#     net.setCurrent(5*np.ones(N))
-#     net.update()
-#     V[t,:], _ = net.getState()
-
+      plt.savefig('firing_rate_p={}.pdf'.format(p))
 
 if __name__ == '__main__':
+  # different probability of rewiring
   p_test = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
   for p in p_test:
+    # parameters from slide
     network = ModularNetwork(8, 100, 200)
     network.add_ex2ex_connection(md_each=1000, p=p, wt_min=1,
                                 wt_max=1, scaling=17, delay_min=1, delay_max=20)
@@ -466,20 +471,3 @@ if __name__ == '__main__':
     network.add_in2in_connection(wt_min=-1, wt_max=0, scaling=1, delay_min=1, delay_max=1)
     network.plot_connection(p=p)
     network.simulate_network(duration=1000, p=p)
-    
-    
-  # network = ModularNetwork(8, 10, 20)
-  # network.add_ex2ex_connection(10, 0.1, 1, 1, 17, 1, 20)
-    # print(network.connection)
-    # print(network.wt_coef)
-    # print(network.delay_coef)
-    # print(network.connection * network.wt_coef)
-    # firing_data = network.simulate_network(duration=1000)
-    # plt.figure(figsize=(10, 6))
-    # for t, neurons in enumerate(firing_data):
-    #   for neuron in neurons:
-    #     plt.plot([t, t + 1], [neuron, neuron], color='black')
-    # plt.title('Raster Plot of Neuron Firing')
-    # plt.xlabel('Time (ms)')
-    # plt.ylabel('Neuron Index')
-    # plt.show()
