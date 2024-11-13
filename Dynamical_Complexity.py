@@ -199,8 +199,9 @@ class ModularNetwork(object):
       idx = idx + excit
     self.excit = range(0, idx)
     self.inhib = range(idx, idx + inhib)
+    idx = idx + inhib
     self.connection = np.zeros((idx, idx))
-    self.delay_coef = np.zeros((idx, idx))
+    self.delay_coef = np.zeros((idx, idx), dtype=int)
     self.wt_coef = np.zeros((idx, idx))
 
   def gen_modular_small_world(self, md_lst, md_each, p):
@@ -228,85 +229,257 @@ class ModularNetwork(object):
                 k = random.choice(other_md)
               self.connection[i][k] = 1
 
-  def gen_coef(self, target_matrix, fr_range, to_range, min_val, max_val):
+  def gen_coef(self, target_matrix, fr_range, to_range, min_val, max_val, need_int = False):
     for i in fr_range:
       for j in to_range:
-        target_matrix[i][j] = random.uniform(min_val, max_val)
+        if need_int:
+          target_matrix[i][j] = random.randint(min_val, max_val)
+        else:
+          target_matrix[i][j] = random.uniform(min_val, max_val)
 
 
   def add_ex2ex_connection(self, md_each, p, wt_min, wt_max, scaling, delay_min, delay_max):
     self.gen_modular_small_world(self.md_excit_lst, md_each, p)
     self.gen_coef(self.wt_coef, self.excit, self.excit, wt_min * scaling, wt_max * scaling)
-    self.gen_coef(self.delay_coef, self.excit, self.excit, delay_min, delay_max)
-
-
+    self.gen_coef(self.delay_coef, self.excit, self.excit, delay_min, delay_max, need_int = True)
 
   def add_ex2in_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
     # Create random excitatory-to-inhibitory connections
-    for i in self.excit:
-      j = random.choice(self.inhib)
-      self.connection[i][j] = 1
+    remain_md_excit_lst = self.md_excit_lst.copy()
+    for i in self.inhib:
+      fr_md = random.choice(range(0, self.md_num))
+      while len(remain_md_excit_lst[fr_md]) < 4:
+        fr_md = random.choice(range(0, self.md_num))
+      chosen = random.sample(remain_md_excit_lst[fr_md], 4)
+      for j in chosen:
+        self.connection[j][i] = 1
+      remain_md_excit_lst[fr_md] = list(set(remain_md_excit_lst[fr_md]) - set(chosen))
+
     self.gen_coef(self.wt_coef, self.excit, self.inhib, wt_min * scaling, wt_max * scaling)
-    self.gen_coef(self.delay_coef, self.excit, self.inhib, delay_min, delay_max)
+    self.gen_coef(self.delay_coef, self.excit, self.inhib, delay_min, delay_max, need_int = True)
 
   def add_in2ex_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
-    # Create random inhibitory-to-excitatory connections
-    for j in self.inhib:
-      i = random.choice(self.excit)
-      self.connection[j][i] = 1
+    for i in self.inhib:
+      for j in self.excit:
+        self.connection[i][j] = 1
     self.gen_coef(self.wt_coef, self.inhib, self.excit, wt_min * scaling, wt_max * scaling)
-    self.gen_coef(self.delay_coef, self.inhib, self.excit, delay_min, delay_max)
+    self.gen_coef(self.delay_coef, self.inhib, self.excit, delay_min, delay_max, need_int = True)
 
   def add_in2in_connection(self, wt_min, wt_max, scaling, delay_min, delay_max):
 
     for i in self.inhib:
-      j = random.choice(self.inhib)
-      while i == j:
-        j = random.choice(self.inhib)
-      self.connection[i][j] = 1
+      for j in self.inhib:
+        if i != j:
+          self.connection[i][j] = 1
     self.gen_coef(self.wt_coef, self.inhib, self.inhib, wt_min * scaling, wt_max * scaling)
-    self.gen_coef(self.delay_coef, self.inhib, self.inhib, delay_min, delay_max)
+    self.gen_coef(self.delay_coef, self.inhib, self.inhib, delay_min, delay_max, need_int = True)
 
-  def simulate_network(self, duration=1000):
+  def plot_connection(self, p=0.1, show=False):
+    # Create matrix for counting connections between modules
+    n_modules = self.md_num + 1  # +1 for inhibitory module
+    connection_matrix = np.zeros((n_modules, n_modules))
+    
+    # Count connections between excitatory modules
+    for i in range(self.md_num):
+        for j in range(self.md_num):
+            count = 0
+            for src in self.md_excit_lst[i]:
+                for dst in self.md_excit_lst[j]:
+                    if self.connection[src][dst] == 1:
+                        count += 1
+            connection_matrix[i][j] = count
+    
+    # Count connections to/from inhibitory module
+    for i in range(self.md_num):
+        # Excitatory to inhibitory
+        count_to_inhib = 0
+        for src in self.md_excit_lst[i]:
+            for dst in self.inhib:
+                if self.connection[src][dst] == 1:
+                    count_to_inhib += 1
+        connection_matrix[i][-1] = count_to_inhib
+        
+        # Inhibitory to excitatory
+        count_from_inhib = 0
+        for src in self.inhib:
+            for dst in self.md_excit_lst[i]:
+                if self.connection[src][dst] == 1:
+                    count_from_inhib += 1
+        connection_matrix[-1][i] = count_from_inhib
+    
+    # Count inhibitory to inhibitory connections
+    inhib_count = 0
+    for src in self.inhib:
+        for dst in self.inhib:
+            if self.connection[src][dst] == 1:
+                inhib_count += 1
+    connection_matrix[-1][-1] = inhib_count
+    
+    # Create figure with two subplots
+    plt.figure(figsize=(10, 10))
+    
+    # Plot 1: Connection matrix as heatmap
+    # plt.subplot(121)
+    
+    # Apply log transformation (adding small constant to avoid log(0))
+    log_matrix = np.log1p(connection_matrix)
+    
+    # Create heatmap with visible grid
+    im = plt.imshow(log_matrix, cmap='YlOrRd')
+    # plt.grid(True, which='minor', color='black', linewidth=0.5)
+    # plt.grid(True, which='major', color='black', linewidth=1)
+    
+    # Add colorbar with original values
+    # cbar = plt.colorbar(im)
+    # cbar.set_label('Connections', rotation=270, labelpad=15)
+    
+    # Add labels
+    module_labels = [f'Excit_M{i+1}' for i in range(self.md_num)] + ['Inhib']
+    plt.xticks(range(n_modules), module_labels, fontweight='bold', rotation=0)
+    plt.yticks(range(n_modules), module_labels, fontweight='bold')
+    
+    # Move labels to left and top
+    ax = plt.gca()
+    ax.xaxis.set_label_position('top')
+    ax.xaxis.set_ticks_position('top')
+    
+    # Add text annotations with original values
+    for i in range(n_modules):
+        for j in range(n_modules):
+            plt.text(j, i, int(connection_matrix[i][j]), 
+                    ha='center', va='center', 
+                    color='black' if log_matrix[i][j] < log_matrix.max()/2 else 'white',
+                    fontweight='bold', fontsize=8)
+    
+    plt.title('Connection Matrix (edges between modules), p = {}'.format(p), pad=30, fontweight='bold', fontsize=14)
+    
+    # Draw grid lines
+    plt.grid(True, which='minor', color='black', linewidth=0.5)
+    if show:
+        plt.show()
+    plt.savefig('connection_matrix_p={}.png'.format(p))
+
+  def simulate_network(self, duration=1000, p=0.1, show=False):
       # Izhikevich
-      iz_network = IzNetwork(len(self.excit) + len(self.inhib), 20)
-      iz_network.setWeights(self.wt_coef)
+      N = len(self.excit) + len(self.inhib)
+      a = []
+      b = []
+      c = []
+      d = []
+      for i in range(len(self.excit)):
+        r = random.uniform(0, 1)
+        ex_a = 0.02
+        ex_b = 0.2
+        ex_c = -65 + 15*(r**2)
+        ex_d = 8 - 6*(r**2)
+        a.append(ex_a)
+        b.append(ex_b)
+        c.append(ex_c)
+        d.append(ex_d)
+      
+      for i in range(len(self.inhib)):
+        r = random.uniform(0, 1)
+        in_a = 0.02 + 0.08*r
+        in_b = 0.25 - 0.05*r
+        in_c = -65
+        in_d = 2
+        a.append(in_a)
+        b.append(in_b)
+        c.append(in_c)
+        d.append(in_d)
+
+      a = np.array(a)
+      b = np.array(b)
+      c = np.array(c)
+      d = np.array(d)
+
+      iz_network = IzNetwork(N, 20)
+      iz_network.setParameters(a, b, c, d)
+      iz_network.setWeights(self.wt_coef * self.connection)
       iz_network.setDelays(self.delay_coef)
 
-      firing_data = []
+      V = np.zeros((duration, len(self.excit)))
       for t in range(duration):
-          if t % 10 == 0:
-              I = np.zeros(len(self.excit) + len(self.inhib))
-              I[random.choice(self.excit)] = 10
-              iz_network.setCurrent(I)
-          fired_neurons = iz_network.update()
-          firing_data.append(fired_neurons)
+        I = np.random.poisson(lam = 0.01, size = N)
+        I[I > 0] = 1
+        I.dtype = 'int'
+        I = I * 15
+        iz_network.setCurrent(I)
+        iz_network.update()
+        V[t,:] = iz_network.getState()[0][0:len(self.excit)]
+        # print(t, np.count_nonzero(V[t] > 29))
+      t, n = np.where(V > 29)
+      plt.figure(figsize=(20, 5))
+      plt.scatter(t, n)
+      plt.title('Raster Plot of Neuron Firing, p = {}'.format(p))
+      plt.xlabel('Time (ms) + 0s', loc = 'center')
+      plt.ylabel('Neuron number')
+      plt.ylim(len(network.excit), 0)
+      plt.xlim(0, 1001)
+      plt.xticks(range(0, 1001, 100))
+      if show:
+        plt.show()
+      plt.savefig('raster_plot_p={}.png'.format(p))
 
-      return firing_data
+      x = [20 * i for i in range(0, 50)]
+      ys = []
+      for md in self.md_excit_lst:
+        y = [0] * 50
+        for i in range(0, 50):
+          mid = i * 20
+          l = max(mid - 25, 0)
+          r = min(mid + 25, 1000)
+          y[i] = np.count_nonzero(V[l:r, md] > 29) / (r - l)
+        ys.append(y)
+      plt.figure(figsize=(20, 5))
+      for y in ys:
+        plt.plot(x, y)
+      plt.title('Firing rate of each module, p = {}'.format(p))
+      plt.xlabel('Time (ms) + 0s', loc = 'center')
+      plt.ylabel('Mean Firing rate')
+      plt.xlim(0, 1001)
+      plt.xticks(range(0, 1001, 100))
+      if show:
+        plt.show()
+      plt.savefig('firing_rate_p={}.png'.format(p))
 
+    
+
+#   T = 500
+# V = np.zeros((T, N))
+# for t in range(T):
+#     net.setCurrent(5*np.ones(N))
+#     net.update()
+#     V[t,:], _ = net.getState()
 
 
 if __name__ == '__main__':
-  network = ModularNetwork(8, 100, 200)
-  network.add_ex2ex_connection(md_each=1000, p=0.1, wt_min=1,
-                              wt_max=1, scaling=17, delay_min=1, delay_max=20)
-  network.add_ex2in_connection(wt_min=1, wt_max=1, scaling=1, delay_min=1, delay_max=20)
-  network.add_in2ex_connection(wt_min=1, wt_max=1, scaling=1, delay_min=1, delay_max=20)
-  network.add_in2in_connection(wt_min=1, wt_max=1, scaling=1, delay_min=1, delay_max=20)
-
-  firing_data = network.simulate_network(duration=1000)
+  p_test = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
+  for p in p_test:
+    network = ModularNetwork(8, 100, 200)
+    network.add_ex2ex_connection(md_each=1000, p=p, wt_min=1,
+                                wt_max=1, scaling=17, delay_min=1, delay_max=20)
+    network.add_ex2in_connection(wt_min=0, wt_max=1, scaling=50, delay_min=1, delay_max=1)
+    network.add_in2ex_connection(wt_min=-1, wt_max=0, scaling=2, delay_min=1, delay_max=1)
+    network.add_in2in_connection(wt_min=-1, wt_max=0, scaling=1, delay_min=1, delay_max=1)
+    network.plot_connection(p=p)
+    network.simulate_network(duration=1000, p=p)
+    
+    
   # network = ModularNetwork(8, 10, 20)
   # network.add_ex2ex_connection(10, 0.1, 1, 1, 17, 1, 20)
-  print(network.connection)
-  print(network.wt_coef)
-  print(network.delay_coef)
-  plt.figure(figsize=(10, 6))
-  for t, neurons in enumerate(firing_data):
-    for neuron in neurons:
-      plt.plot([t, t + 1], [neuron, neuron], color='black')
-  plt.title('Raster Plot of Neuron Firing')
-  plt.xlabel('Time (ms)')
-  plt.ylabel('Neuron Index')
-  plt.show()
+    # print(network.connection)
+    # print(network.wt_coef)
+    # print(network.delay_coef)
+    # print(network.connection * network.wt_coef)
+    # firing_data = network.simulate_network(duration=1000)
+    # plt.figure(figsize=(10, 6))
+    # for t, neurons in enumerate(firing_data):
+    #   for neuron in neurons:
+    #     plt.plot([t, t + 1], [neuron, neuron], color='black')
+    # plt.title('Raster Plot of Neuron Firing')
+    # plt.xlabel('Time (ms)')
+    # plt.ylabel('Neuron Index')
+    # plt.show()
